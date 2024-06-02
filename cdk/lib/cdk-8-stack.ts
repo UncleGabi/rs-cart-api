@@ -10,6 +10,7 @@ import * as apigw from "aws-cdk-lib/aws-apigateway";
 import { ParameterGroup, DatabaseInstanceEngine } from "aws-cdk-lib/aws-rds";
 import { PostgresEngineVersion } from "aws-cdk-lib/aws-rds";
 import path = require("path");
+import { Secret } from "aws-cdk-lib/aws-secretsmanager";
 
 export class Cdk8Stack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -31,6 +32,9 @@ export class Cdk8Stack extends cdk.Stack {
         "rds.force_ssl": "0",
       },
     });
+    const dbSecretName = "rds_credentials_secret"
+    const dbCredentialsSecret = rds.Credentials.fromGeneratedSecret("postgres", { secretName: dbSecretName });
+    const dbName = "rabo_db"
 
     const dbInstance = new rds.DatabaseInstance(this, "DBInstance", {
       vpc,
@@ -44,8 +48,8 @@ export class Cdk8Stack extends cdk.Stack {
       multiAz: false,
       publiclyAccessible: true, // Make it publicly accessible for simplicity
       storageType: rds.StorageType.GP2,
-      databaseName: "mydb",
-      credentials: rds.Credentials.fromGeneratedSecret("postgres"),
+      databaseName: dbName,
+      credentials: dbCredentialsSecret,
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T3,
         ec2.InstanceSize.MICRO
@@ -54,18 +58,22 @@ export class Cdk8Stack extends cdk.Stack {
 
     dbInstance.connections.allowFromAnyIpv4(ec2.Port.tcp(5432));
 
-    // Create a new secret in Secrets Manager
-    // const secret = new secretsmanager.Secret(this, "MySecret");
+    const appSecret = Secret.fromSecretNameV2(this,'app-secret-id',dbSecretName);
+    const dbUserPassword = appSecret.secretValueFromJson('password').unsafeUnwrap();
 
     const nestJsFunction = new lambda.Function(this, "NestJsFunction", {
       vpc,
       environment: {
-        SECRET_ARN: dbInstance.secret?.secretArn || "",
+        DB_USER_NAME: dbCredentialsSecret.username,
+        DB_USER_PASSWORD: dbUserPassword,
+        DB_PORT: dbInstance.instanceEndpoint.port.toString(),
+        DB_HOST: dbInstance.instanceEndpoint.hostname,
+        DB_NAME: dbName
       },
       code: lambda.Code.fromAsset(
-        path.resolve(__dirname, "../rs-cart-api.zip")
+        path.resolve(__dirname, "../../build/rs-cart-api.zip")
       ),
-      handler: "dist/lambda.handler", // The exported handler in your entry point file
+      handler: "lambda.handler", // The exported handler in your entry point file
       runtime: lambda.Runtime.NODEJS_20_X,
       logRetention: cdk.aws_logs.RetentionDays.ONE_DAY,
       memorySize: 1256,

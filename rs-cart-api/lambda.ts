@@ -20,7 +20,7 @@ const bootstrap = async () => {
       new ExpressAdapter(expressApp),
       { cors: true, logger: ['error', 'warn', 'log', 'verbose', 'debug'] },
     );
-    app.setGlobalPrefix('cart');
+    // app.setGlobalPrefix('cart');
     app.use(eventContext());
     app.use(helmet());
     app.use(helmet.noSniff());
@@ -79,23 +79,28 @@ const checkTablesExist = async (client) => {
 };
 
 exports.handler = async function (event: any, context: any) {
-  const secretsManager = new AWS.SecretsManager();
+  //   const secretsManager = new AWS.SecretsManager();
   console.log('Event:', event);
-  const secretName = process.env.SECRET_ARN ?? '';
-  console.log(secretName);
+  const DB_USER_NAME = process.env.DB_USER_NAME ?? '';
+  const DB_USER_PASSWORD = process.env.DB_USER_PASSWORD ?? '';
+  const DB_PORT = process.env.DB_PORT ?? '';
+  const DB_HOST = process.env.DB_HOST ?? '';
+  const DB_NAME = process.env.DB_NAME ?? '';
+  //   const secretName = process.env.SECRET_ARN ?? '';
+  //   console.log(secretName);
 
   try {
-    const data = await secretsManager
-      .getSecretValue({ SecretId: secretName })
-      .promise();
-    console.log('Secret:', data.SecretString);
-    const secret = JSON.parse(data.SecretString ?? '');
+    // const data = await secretsManager
+    //   .getSecretValue({ SecretId: secretName })
+    //   .promise();
+    // console.log('Secret:', data.SecretString);
+    // const secret = JSON.parse(data.SecretString ?? '');
     const client = new Client({
-      host: secret.host,
-      port: secret.port,
-      database: secret.dbname,
-      user: secret.username,
-      password: secret.password,
+      host: DB_HOST,
+      port: DB_PORT,
+      database: DB_NAME,
+      user: DB_USER_NAME,
+      password: DB_USER_PASSWORD,
     });
 
     await client.connect();
